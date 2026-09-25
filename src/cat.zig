@@ -60,54 +60,6 @@ pub fn main(init: std.process.Init) anyerror!void {
         total_files_size += file_sizes[i];
     }
 
-    const noOptions = file_paths.items.len == args.len - 1;
-    if (noOptions) {
-        try simple_cat(allocator, io, files, file_sizes, total_files_size);
-        return;
-    }
-
-    if (n) {
-        total_files_size *= 2;
-    }
-
-    const buffer = try allocator.alloc(u8, total_files_size);
-    defer allocator.free(buffer);
-
-    var file_reader: std.Io.File.Reader = undefined;
-
-    var result: std.Io.Writer.Allocating = .init(allocator);
-    defer result.deinit();
-
-    var offset: usize = 0;
-    var line_count: usize = 0;
-    for (files, file_sizes) |file, size| {
-        file_reader = file.reader(io, buffer[offset .. offset + size]);
-        const reader = &file_reader.interface;
-
-        while (reader.takeDelimiterInclusive('\n')) |line| {
-            line_count += 1;
-            try result.writer.print("{d} {s}", .{ line_count, line });
-        } else |err| switch (err) {
-            error.ReadFailed => return file_reader.err.?,
-            error.EndOfStream => {
-                const remaining = reader.end - reader.seek;
-                if (remaining > 0) {
-                    const line = try reader.take(remaining);
-                    line_count += 1;
-                    try result.writer.print("{d} {s}\n", .{ line_count, line });
-                }
-            },
-            else => unreachable,
-        }
-
-        offset += size;
-    }
-
-    const output: []const u8 = result.written();
-    std.debug.print("{s}", .{output});
-}
-
-pub fn simple_cat(allocator: Allocator, io: std.Io, files: []std.Io.File, file_sizes: []usize, total_files_size: usize) anyerror!void {
     const buffer = try allocator.alloc(u8, total_files_size);
     defer allocator.free(buffer);
 
@@ -117,5 +69,62 @@ pub fn simple_cat(allocator: Allocator, io: std.Io, files: []std.Io.File, file_s
         offset += size;
     }
 
-    std.debug.print("{s}", .{buffer});
+    const noOptions = file_paths.items.len == args.len - 1;
+    if (noOptions) {
+        std.debug.print("{s}", .{buffer});
+        return;
+    }
+
+    var line_count: usize = 0;
+    var extra_size: usize = 0;
+
+    offset = 0;
+    for (file_sizes) |size| {
+        const file_buf = buffer[offset .. offset + size];
+        var start: usize = 0;
+
+        while (std.mem.findScalar(u8, file_buf[start..], '\n')) |i| {
+            line_count += 1;
+            extra_size += std.fmt.count("{d} ", .{line_count});
+            start += i + 1;
+        }
+
+        if (start < file_buf.len) {
+            line_count += 1;
+            extra_size += std.fmt.count("{d} ", .{line_count});
+            extra_size += 1;
+        }
+
+        offset += size;
+    }
+
+    const output_size = total_files_size + extra_size;
+    const output = try allocator.alloc(u8, output_size);
+    defer allocator.free(output);
+
+    var out_writer = std.Io.Writer.fixed(output);
+
+    offset = 0;
+    line_count = 0;
+    for (file_sizes) |size| {
+        const file_buf = buffer[offset .. offset + size];
+        var start: usize = 0;
+
+        while (std.mem.indexOfScalar(u8, file_buf[start..], '\n')) |i| {
+            const line = file_buf[start .. start + i + 1]; // includes '\n'
+            line_count += 1;
+            try out_writer.print("{d} {s}", .{ line_count, line });
+            start += i + 1;
+        }
+
+        if (start < file_buf.len) {
+            const line = file_buf[start..];
+            line_count += 1;
+            try out_writer.print("{d} {s}\n", .{ line_count, line });
+        }
+
+        offset += size;
+    }
+
+    std.debug.print("{s}", .{output});
 }
