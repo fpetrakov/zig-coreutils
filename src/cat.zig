@@ -42,7 +42,10 @@ pub fn main(init: std.process.Init) anyerror!void {
 
     const num_files = file_paths.items.len;
     const files = try allocator.alloc(std.Io.File, num_files);
-    defer allocator.free(files);
+    defer {
+        for (files) |file| file.close();
+        allocator.free(files);
+    }
     const file_sizes = try allocator.alloc(usize, num_files);
     defer allocator.free(file_sizes);
 
