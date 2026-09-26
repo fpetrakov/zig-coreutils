@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const stringToEnum = std.meta.stringToEnum;
 const fatal = std.process.fatal;
+
 const usage =
     \\Usage: cat [OPTION]... [FILE]...
     \\Concatenate FILE(s) to standard output.

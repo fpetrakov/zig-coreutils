@@ -5,6 +5,7 @@ const fatal = std.process.fatal;
 const cleanExit = std.process.cleanExit;
 const mem = std.mem;
 const Io = std.Io;
+
 const usage =
     \\Usage: touch [OPTION]... [FILE]...
     \\Update the access and modification times of each FILE to the current time.

@@ -7,4 +7,10 @@ The purpose is just learning Zig and providing some value by publishing Zig code
 ## Done
 
 - [x] cat - kinda 
-- [] touch - not at all
+- [x] touch - kinda
+- [] ls - nope
+- [] clear - nope
+- [] mv - nope
+- [] whoami - nope
+- [] date - nope
+- [] kill - nope
