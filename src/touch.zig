@@ -69,6 +69,14 @@ pub fn main(init: std.process.Init) anyerror!void {
 
         var file = try cwd.openFile(io, file_path, .{ .mode = .read_write });
         defer file.close(io);
+
+        if (opts.a) {
+            _ = try io.vtable.fileSetTimestamps(io.userdata, file, .{
+                .access_timestamp = .now,
+            });
+            continue;
+        }
+
         try file.setTimestampsNow(io);
     }
 }
