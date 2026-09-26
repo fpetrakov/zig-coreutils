@@ -56,11 +56,19 @@ pub fn main(init: std.process.Init) anyerror!void {
         fatal("expected files", .{});
     }
 
-    const noOptions = !opts.a;
-    if (noOptions) {
-        for (file_paths.items) |file_path| {
-            var file = try std.Io.Dir.cwd().createFile(io, file_path, .{});
-            defer file.close(io);
-        }
+    const cwd = Io.Dir.cwd();
+    for (file_paths.items) |file_path| {
+        cwd.access(io, file_path, .{}) catch |err| switch (err) {
+            error.FileNotFound => {
+                var file = try cwd.createFile(io, file_path, .{});
+                defer file.close(io);
+                continue;
+            },
+            else => return err,
+        };
+
+        var file = try cwd.openFile(io, file_path, .{ .mode = .read_write });
+        defer file.close(io);
+        try file.setTimestampsNow(io);
     }
 }
