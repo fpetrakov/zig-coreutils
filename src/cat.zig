@@ -2,7 +2,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const stringToEnum = std.meta.stringToEnum;
 const fatal = std.process.fatal;
-const cleanExit = std.process.cleanExit;
 const usage =
     \\Usage: cat [OPTION]... [FILE]...
     \\Concatenate FILE(s) to standard output.
@@ -54,7 +53,7 @@ pub fn main(init: std.process.Init) anyerror!void {
 
         if (std.mem.eql(u8, arg, "--help")) {
             std.log.info("{s}", .{usage});
-            cleanExit(io);
+            return;
         }
 
         const opt = stringToEnum(Option, arg[1..]) orelse {
@@ -102,9 +101,12 @@ pub fn main(init: std.process.Init) anyerror!void {
         offset += size;
     }
 
+    var stdout_writer = std.Io.File.stdout().writer(io, &.{});
+    const stdout = &stdout_writer.interface;
+
     const noOptions = num_files == args.len - 1;
     if (noOptions) {
-        std.debug.print("{s}", .{buffer});
+        _ = try stdout.writeAll(buffer);
         return;
     }
 
@@ -141,10 +143,8 @@ pub fn main(init: std.process.Init) anyerror!void {
     }
 
     const output_size = total_files_size + extra_size;
-    const output = try allocator.alloc(u8, output_size);
-    defer allocator.free(output);
-
-    var out_writer = std.Io.Writer.fixed(output);
+    const stdout_buffer = try allocator.alloc(u8, output_size);
+    defer allocator.free(stdout_buffer);
 
     offset = 0;
     line_count = 0;
@@ -155,29 +155,27 @@ pub fn main(init: std.process.Init) anyerror!void {
         while (std.mem.indexOfScalar(u8, file_buf[start..], '\n')) |i| {
             const line = file_buf[start .. start + i + 1]; // includes '\n'
             if (opts.b and i == 0) {
-                try out_writer.print("{s}", .{line});
+                try stdout.print("{s}", .{line});
                 start += 1;
                 continue;
             }
             line_count += 1;
-            try out_writer.print("{d} {s}", .{ line_count, line });
+            try stdout.print("{d} {s}", .{ line_count, line });
             start += i + 1;
         }
 
         if (start < file_buf.len and opts.b) {
             const line = file_buf[start..];
-            try out_writer.print("{s}", .{line});
+            try stdout.print("{s}", .{line});
             continue;
         }
 
         if (start < file_buf.len) {
             const line = file_buf[start..];
             line_count += 1;
-            try out_writer.print("{d} {s}\n", .{ line_count, line });
+            try stdout.print("{d} {s}\n", .{ line_count, line });
         }
 
         offset += size;
     }
-
-    std.debug.print("{s}", .{output});
 }
