@@ -6,11 +6,17 @@ const cleanExit = std.process.cleanExit;
 const usage =
     \\Usage: cat [OPTION]... [FILE]...
     \\Concatenate FILE(s) to standard output.
+    \\With no FILE, or when FILE is -, read standard input.
+    \\
+    \\-b number nonempty output lines, overrides
+    \\-n number all output lines
 ;
 
-const Option = enum {
-    @"-n",
-};
+const Option = enum { n, b };
+var opts = struct {
+    n: bool = false,
+    b: bool = false,
+}{};
 
 pub fn main(init: std.process.Init) anyerror!void {
     const io = init.io;
@@ -18,25 +24,48 @@ pub fn main(init: std.process.Init) anyerror!void {
     const args = try init.minimal.args.toSlice(allocator);
 
     if (args.len <= 1) {
-        std.log.info("{s}", .{usage});
-        fatal("expected command argument", .{});
+        const stdin_buffer = try allocator.alloc(u8, 4096);
+        defer allocator.free(stdin_buffer);
+        var stdin_reader = std.Io.File.stdin().reader(io, stdin_buffer);
+        const stdin = &stdin_reader.interface;
+
+        const stdout_buffer = try allocator.alloc(u8, 4096);
+        defer allocator.free(stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(io, stdout_buffer);
+        const stdout = &stdout_writer.interface;
+
+        while (true) {
+            const line = stdin.takeDelimiterInclusive('\n') catch |err| switch (err) {
+                error.EndOfStream => break,
+                else => return err,
+            };
+
+            try stdout.writeAll(line);
+            try stdout.flush();
+        }
     }
 
     var file_paths: std.ArrayList([]const u8) = .empty;
-    var n = false;
-
     for (args[1..]) |arg| {
-        const opt = stringToEnum(Option, arg) orelse {
+        if (arg[0] == '-') {
+            if (std.mem.eql(u8, arg, "--help")) {
+                std.log.info("{s}", .{usage});
+                cleanExit(io);
+            }
+
+            const opt = stringToEnum(Option, arg[1..]) orelse {
+                try file_paths.append(allocator, arg);
+                continue;
+            };
+            switch (opt) {
+                inline else => |tag| @field(opts, @tagName(tag)) = true,
+            }
+        } else {
             try file_paths.append(allocator, arg);
-            continue;
-        };
-        switch (opt) {
-            .@"-n" => n = true,
         }
     }
 
     if (file_paths.items.len <= 0) {
-        // TODO: read stdin to stdout
         std.log.info("{s}", .{usage});
         fatal("expected files", .{});
     }
@@ -54,7 +83,9 @@ pub fn main(init: std.process.Init) anyerror!void {
 
     const cwd = std.Io.Dir.cwd();
     for (file_paths.items, 0..) |file_path, i| {
-        files[i] = try cwd.openFile(io, file_path, .{});
+        files[i] = cwd.openFile(io, file_path, .{}) catch |err| {
+            fatal("{s}: {s}", .{ file_path, @errorName(err) });
+        };
         const stat = try files[i].stat(io);
         file_sizes[i] = @intCast(stat.size);
         total_files_size += file_sizes[i];
@@ -84,12 +115,20 @@ pub fn main(init: std.process.Init) anyerror!void {
         var start: usize = 0;
 
         while (std.mem.findScalar(u8, file_buf[start..], '\n')) |i| {
+            if (opts.b and i == 0) {
+                start += 1;
+                continue;
+            }
             line_count += 1;
             extra_size += std.fmt.count("{d} ", .{line_count});
             start += i + 1;
         }
 
         if (start < file_buf.len) {
+            if (opts.b) {
+                extra_size += 1;
+                continue;
+            }
             line_count += 1;
             extra_size += std.fmt.count("{d} ", .{line_count});
             extra_size += 1;
@@ -112,6 +151,11 @@ pub fn main(init: std.process.Init) anyerror!void {
 
         while (std.mem.indexOfScalar(u8, file_buf[start..], '\n')) |i| {
             const line = file_buf[start .. start + i + 1]; // includes '\n'
+            if (opts.b and i == 0) {
+                try out_writer.print("{s}", .{line});
+                start += 1;
+                continue;
+            }
             line_count += 1;
             try out_writer.print("{d} {s}", .{ line_count, line });
             start += i + 1;
@@ -119,6 +163,10 @@ pub fn main(init: std.process.Init) anyerror!void {
 
         if (start < file_buf.len) {
             const line = file_buf[start..];
+            if (opts.b) {
+                try out_writer.print("{s}", .{line});
+                continue;
+            }
             line_count += 1;
             try out_writer.print("{d} {s}\n", .{ line_count, line });
         }
