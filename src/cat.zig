@@ -47,21 +47,23 @@ pub fn main(init: std.process.Init) anyerror!void {
 
     var file_paths: std.ArrayList([]const u8) = .empty;
     for (args[1..]) |arg| {
-        if (arg[0] == '-') {
-            if (std.mem.eql(u8, arg, "--help")) {
-                std.log.info("{s}", .{usage});
-                cleanExit(io);
-            }
-
-            const opt = stringToEnum(Option, arg[1..]) orelse {
-                try file_paths.append(allocator, arg);
-                continue;
-            };
-            switch (opt) {
-                inline else => |tag| @field(opts, @tagName(tag)) = true,
-            }
-        } else {
+        if (arg[0] != '-') {
             try file_paths.append(allocator, arg);
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--help")) {
+            std.log.info("{s}", .{usage});
+            cleanExit(io);
+        }
+
+        const opt = stringToEnum(Option, arg[1..]) orelse {
+            try file_paths.append(allocator, arg);
+            continue;
+        };
+
+        switch (opt) {
+            inline else => |tag| @field(opts, @tagName(tag)) = true,
         }
     }
 
@@ -124,11 +126,12 @@ pub fn main(init: std.process.Init) anyerror!void {
             start += i + 1;
         }
 
+        if (start < file_buf.len and opts.b) {
+            extra_size += 1;
+            continue;
+        }
+
         if (start < file_buf.len) {
-            if (opts.b) {
-                extra_size += 1;
-                continue;
-            }
             line_count += 1;
             extra_size += std.fmt.count("{d} ", .{line_count});
             extra_size += 1;
@@ -161,12 +164,14 @@ pub fn main(init: std.process.Init) anyerror!void {
             start += i + 1;
         }
 
+        if (start < file_buf.len and opts.b) {
+            const line = file_buf[start..];
+            try out_writer.print("{s}", .{line});
+            continue;
+        }
+
         if (start < file_buf.len) {
             const line = file_buf[start..];
-            if (opts.b) {
-                try out_writer.print("{s}", .{line});
-                continue;
-            }
             line_count += 1;
             try out_writer.print("{d} {s}\n", .{ line_count, line });
         }
