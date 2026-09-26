@@ -67,12 +67,12 @@ pub fn main(init: std.process.Init) anyerror!void {
         }
     }
 
-    if (file_paths.items.len <= 0) {
+    const num_files = file_paths.items.len;
+    if (num_files <= 0) {
         std.log.info("{s}", .{usage});
         fatal("expected files", .{});
     }
 
-    const num_files = file_paths.items.len;
     const files = try allocator.alloc(std.Io.File, num_files);
     defer {
         for (files) |file| file.close(io);
@@ -102,7 +102,7 @@ pub fn main(init: std.process.Init) anyerror!void {
         offset += size;
     }
 
-    const noOptions = file_paths.items.len == args.len - 1;
+    const noOptions = num_files == args.len - 1;
     if (noOptions) {
         std.debug.print("{s}", .{buffer});
         return;
