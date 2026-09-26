@@ -92,12 +92,12 @@ pub fn main(init: std.process.Init) anyerror!void {
         total_files_size += file_sizes[i];
     }
 
-    const buffer = try allocator.alloc(u8, total_files_size);
-    defer allocator.free(buffer);
+    const files_buffer = try allocator.alloc(u8, total_files_size);
+    defer allocator.free(files_buffer);
 
     var offset: usize = 0;
     for (files, file_sizes) |file, size| {
-        _ = try file.readPositionalAll(io, buffer[offset .. offset + size], 0);
+        _ = try file.readPositionalAll(io, files_buffer[offset .. offset + size], 0);
         offset += size;
     }
 
@@ -106,7 +106,7 @@ pub fn main(init: std.process.Init) anyerror!void {
 
     const noOptions = num_files == args.len - 1;
     if (noOptions) {
-        _ = try stdout.writeAll(buffer);
+        _ = try stdout.writeAll(files_buffer);
         return;
     }
 
@@ -115,7 +115,7 @@ pub fn main(init: std.process.Init) anyerror!void {
 
     offset = 0;
     for (file_sizes) |size| {
-        const file_buf = buffer[offset .. offset + size];
+        const file_buf = files_buffer[offset .. offset + size];
         var start: usize = 0;
 
         while (std.mem.findScalar(u8, file_buf[start..], '\n')) |i| {
@@ -149,7 +149,7 @@ pub fn main(init: std.process.Init) anyerror!void {
     offset = 0;
     line_count = 0;
     for (file_sizes) |size| {
-        const file_buf = buffer[offset .. offset + size];
+        const file_buf = files_buffer[offset .. offset + size];
         var start: usize = 0;
 
         while (std.mem.indexOfScalar(u8, file_buf[start..], '\n')) |i| {
