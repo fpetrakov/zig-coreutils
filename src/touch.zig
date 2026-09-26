@@ -71,9 +71,7 @@ pub fn main(init: std.process.Init) anyerror!void {
         defer file.close(io);
 
         if (opts.a) {
-            _ = try io.vtable.fileSetTimestamps(io.userdata, file, .{
-                .access_timestamp = .now,
-            });
+            file.setTimestamps(io, .{ .access_timestamp = .now });
             continue;
         }
 
